@@ -16,8 +16,7 @@ locals  {
     var.docker_package_location :
       var.docker_package_location == "" ? "" : "s3://${element(concat(aws_s3_bucket.icp_binaries.*.id, list("")), 0)}/icp-docker.bin"}"
   lambda_s3_bucket = "${element(concat(aws_s3_bucket.icp_lambda.*.id, list("")), 0)}"
- default_ami = "${var.ami != "" ? var.ami : data.aws_ami.rhel.id}"
- # default_ami = "${var.ami != "" ? var.ami : data.aws_ami.ubuntu.id}"
+  default_ami = "${var.ami != "" ? var.ami : data.aws_ami.rhel.id}"
 }
 
 ## Search for a default Ubuntu image to allow this option

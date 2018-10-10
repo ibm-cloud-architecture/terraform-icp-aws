@@ -154,7 +154,11 @@ image_load() {
   if [[ ! -z "${image_location}" ]]; then
     if [[ "${image_location:0:2}" == "s3" ]]; then
       echo "Load docker images from ${image_location} ..."
-      ${awscli} s3 cp ${image_location} - | tar zxf - -O | docker load
+      #TODO Is this install directory parameterized?
+      IMAGE_DIR=/opt/ibm/cluster/images
+      mkdir -p ${IMAGE_DIR}
+      ${awscli} s3 cp ${image_location} ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.0.tar.gz 
+      tar zxf ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.0.tar.gz -O | docker load
     fi
   fi
 
@@ -207,6 +211,6 @@ else
 fi
 
 docker_install
-#image_load
+image_load
 
 echo "Complete.."

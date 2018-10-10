@@ -48,17 +48,14 @@ ${awscli} s3 cp s3://${s3_config_bucket}/cfc-certs /opt/ibm/cluster/cfc-certs
 ${awscli} s3 cp s3://${s3_config_bucket}/ssh_key /opt/ibm/cluster/ssh_key
 ${awscli} s3 cp s3://${s3_config_bucket}/icp-terraform-config.yaml /tmp/icp-terraform-config.yaml
 
-#REOTEMP pull down the tarball into the /cluster/images directory
-
-echo "REO-HOTFIX Symlinking manifest-tool into /usr/bin"
-ls -la /usr/local/bin
+# HOTFIX for https://www.ibm.com/support/knowledgecenter/en/SSBS6K_3.1.0/troubleshoot/manifest_tool.html
+echo "Symlinking manifest-tool into /usr/bin"
 sudo ln -s /usr/local/bin/manifest-tool /usr/bin/manifest-tool
-ls -la /usr/bin/m*
 
-echo "REO-HOTFIX Copying tarball locally"
-mkdir -p /opt/ibm/cluster/images
-${awscli} s3 cp s3://icp-3-1-0-us-west-1/ibm-cloud-private-x86_64-3.1.0.tar.gz /opt/ibm/cluster/images/ibm-cloud-private-x86_64-3.1.0.tar.gz 
-#END REOTEMP SHOULD BE PARAMETERIZED
+#echo "REO-HOTFIX Copying tarball locally"
+#mkdir -p /opt/ibm/cluster/images
+#${awscli} s3 cp s3://icp-3-1-0-us-west-1/ibm-cloud-private-x86_64-3.1.0.tar.gz /opt/ibm/cluster/images/ibm-cloud-private-x86_64-3.1.0.tar.gz 
+#END REO-HOTFIX
 
 # append the image repo
 if [ ! -z "${registry}${registry:+}" ]; then
