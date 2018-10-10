@@ -77,7 +77,7 @@ variable "master" {
     nodes     = "3"
     type      = "m4.xlarge"
     ami       = "" // Leave blank to let terraform search for Ubuntu 16.04 ami. NOT RECOMMENDED FOR PRODUCTION
-    disk      = "100" //GB
+    disk      = "300" //GB
     docker_vol = "100" // GB
     ebs_optimized = true    // not all instance types support EBS optimized
   }
@@ -88,7 +88,7 @@ variable "proxy" {
     nodes     = "3"
     type      = "m4.large"
     ami       = "" // Leave blank to let terraform search for Ubuntu 16.04 ami. NOT RECOMMENDED FOR PRODUCTION
-    disk      = "100" //GB
+    disk      = "150" //GB
     docker_vol = "100" // GB
     ebs_optimized = true    // not all instance types support EBS optimized
   }
@@ -100,7 +100,7 @@ variable "management" {
     nodes     = "3"
     type      = "m4.xlarge"
     ami       = "" // Leave blank to let terraform search for Ubuntu 16.04 ami. NOT RECOMMENDED FOR PRODUCTION
-    disk      = "100" //GB
+    disk      = "300" //GB
     docker_vol = "100" // GB
     ebs_optimized = true    // not all instance types support EBS optimized
   }
@@ -112,7 +112,7 @@ variable "worker" {
     nodes     = "3"
     type      = "m4.xlarge"
     ami       = "" // Leave blank to let terraform search for Ubuntu 16.04 ami. NOT RECOMMENDED FOR PRODUCTION
-    disk      = "100" //GB
+    disk      = "150" //GB
     docker_vol = "100" // GB
     ebs_optimized = true    // not all instance types support EBS optimized
   }
@@ -124,7 +124,7 @@ variable "va" {
     nodes     = "3"
     type      = "m4.xlarge"
     ami       = "" // Leave blank to let terraform search for Ubuntu 16.04 ami. NOT RECOMMENDED FOR PRODUCTION
-    disk      = "100" //GB
+    disk      = "300" //GB
     docker_vol = "100" // GB
     ebs_optimized = true    // not all instance types support EBS optimized
   }
