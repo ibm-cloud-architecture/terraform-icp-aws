@@ -207,6 +207,6 @@ else
 fi
 
 docker_install
-image_load
+#image_load
 
 echo "Complete.."

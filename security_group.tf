@@ -256,7 +256,7 @@ resource "aws_security_group_rule" "master-egress" {
   security_group_id = "${aws_security_group.master.id}"
 }
 
-/*
+
 resource "aws_security_group" "icp-registry-mount" {
   count = "${var.master["nodes"] > 1 ? 1 : 0 }"
   name = "icp_efs_registry_sg-${random_id.clusterid.hex}"
@@ -316,4 +316,4 @@ resource "aws_security_group" "icp-audit-mount" {
     map("Name", "icp-audit-mount-sg-${random_id.clusterid.hex}")
   )}"
 }
-*/
+

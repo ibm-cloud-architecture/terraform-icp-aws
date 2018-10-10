@@ -1,4 +1,3 @@
-/*
 resource "aws_efs_file_system" "icp-registry" {
   count = "${var.master["nodes"] > 1 ? 1 : 0 }"
   creation_token = "icp-${random_id.clusterid.hex}-registry"
@@ -30,4 +29,3 @@ resource "aws_efs_mount_target" "icp-audit" {
   subnet_id     = "${element(aws_subnet.icp_private_subnet.*.id, count.index)}"
   security_groups = [ "${aws_security_group.icp-audit-mount.id}"]
 }
-*/
