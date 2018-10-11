@@ -96,7 +96,7 @@ bastion = {
 }
 ```
 
-The installation output will be written to `/var/log/cloud-init-output.log`.  Bastion hosts are not required for normal operation of the cluster.
+The installation output will be written to `/var/log/cloud-init-output.log` for RHEL 7.4 systems and `/var/log/messages` on RHEL 7.5+ systems.  Bastion hosts are not required for normal operation of the cluster.
 
 When the installation completes,  the `/opt/ibm/cluster` directory on the boot master (i.e. `icp-master01`) is backed up to S3 in a bucket named `icpbackup-<clusterid>`, which can be used in master recovery in case one of the master nodes fails.  It is recommended after every time `terraform apply` is performed, to commit the `terraform.tfstate` into a backend so that the state is stored in source control.
 
