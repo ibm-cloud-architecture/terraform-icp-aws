@@ -7,6 +7,7 @@ This template provisions an HA cluster with ICP 2.1.0.2 enterprise edition.  We 
 * [Infrastructure Architecture](#infrastructure-architecture)
 * [Terraform Automation](#terraform-automation)
 * [Installation Procedure](#installation-procedure)
+* [Community Edition](#installation-procedure-community-edition)
 * [Cluster access](#cluster-access)
 * [AWS Cloud Provider](#aws-cloud-provider)
 
@@ -96,7 +97,7 @@ bastion = {
 }
 ```
 
-The installation output will be written to `/var/log/cloud-init-output.log`.  Bastion hosts are not required for normal operation of the cluster.
+The installation output will be written to `/var/log/cloud-init-output.log` for RHEL 7.4 systems and `/var/log/messages` on RHEL 7.5+ systems.  Bastion hosts are not required for normal operation of the cluster.
 
 When the installation completes,  the `/opt/ibm/cluster` directory on the boot master (i.e. `icp-master01`) is backed up to S3 in a bucket named `icpbackup-<clusterid>`, which can be used in master recovery in case one of the master nodes fails.  It is recommended after every time `terraform apply` is performed, to commit the `terraform.tfstate` into a backend so that the state is stored in source control.
 
@@ -248,6 +249,47 @@ The `cloud_provider` parameter allows Kubernetes to take advantage of some Kuber
 The Terraform automation generates `cluster_CA_domain`, `cluster_lb_address`, and `proxy_lb_address` corresponding to the DNS names for the master and proxy ELB.
 
 Note the other parameters in the `icp-deploy.tf` module.  The config files are stored in `/opt/ibm/cluster/config.yaml` on the boot-master.
+
+### Installing IBM Cloud Private Community Edition 
+
+The following parameters are required settings to install IBM Cloud Private Community Edition.  These values are the preferred values for any conflicting paramters in the `terraform.tfvars` file, as specified above in the [Prerequisites](#prerequisites) section.  These settings have been validated on IBM Cloud Private 3.1.0 Community Edition.
+
+```
+image_location = ""
+patch_images = []
+patch_scripts = []
+
+icp_inception_image = "ibmcom/icp-inception-amd64:3.1.0"
+
+bastion = {
+ nodes = "1"
+}
+
+master = {
+  nodes = "1"          # required to be '1' to install CE
+  type = "m4.2xlarge"  # or m4.4xlarge if 'management' nodes=0
+  disk = "300"
+}
+
+management = {
+  nodes = "1"          # or optionally 0 if you want to run all platform services on 'master'
+  type = "m4.xlarge"
+  disk = "300"
+}
+
+va = {
+  nodes = "0"
+}
+
+proxy = {
+  nodes = "1"          # required to be '1' to install CE
+  disk = "150"
+}
+
+worker = {
+  disk = "150"
+}
+```
 
 ## Cluster access
 

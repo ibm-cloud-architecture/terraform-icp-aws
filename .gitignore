@@ -1,4 +1,4 @@
-# Local .terraform directories
+#  Local .terraform directories
 **/.terraform/*
 
 # .tfstate files
@@ -27,4 +27,9 @@ override.tf.json
 # !example_override.tf
 
 awscli/*
+=======
+# .tfvars files
+*.tfvars
+
+# generated key files
 *.pem
