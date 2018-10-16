@@ -52,11 +52,6 @@ ${awscli} s3 cp s3://${s3_config_bucket}/icp-terraform-config.yaml /tmp/icp-terr
 echo "Symlinking manifest-tool into /usr/bin"
 sudo ln -s /usr/local/bin/manifest-tool /usr/bin/manifest-tool
 
-#echo "REO-HOTFIX Copying tarball locally"
-#mkdir -p /opt/ibm/cluster/images
-#${awscli} s3 cp s3://icp-3-1-0-us-west-1/ibm-cloud-private-x86_64-3.1.0.tar.gz /opt/ibm/cluster/images/ibm-cloud-private-x86_64-3.1.0.tar.gz 
-#END REO-HOTFIX
-
 # append the image repo
 if [ ! -z "${registry}${registry:+}" ]; then
   echo "image_repo: ${registry}${registry:+/}${org}" >> /tmp/icp-terraform-config.yaml
