@@ -147,6 +147,7 @@ for script in ${s3_patch_scripts}; do
   rm -f /opt/ibm/cluster/${script_name}
 done
 
+# REVERTED BACK TO EBS-BASED REGISTRY SUPPORT IN ICP 3.1.0
 # patch the registry to use our S3 bucket
 #region=`curl http://169.254.169.254/latest/dynamic/instance-identity/document | grep "region" | awk -F: '{print $2}' | sed -e 's/[ ",]//g'`
 #sed -i '/filesystem/{$!{N;s/filesystem:\n\(.*\)rootdirectory.*/s3:\n\1bucket: '${s3_registry_bucket}'\n\1region: '${region}'/}}' /opt/ibm/cluster/cfc-components/registry-conf/registry-config.yaml
