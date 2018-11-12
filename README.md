@@ -2,7 +2,9 @@
 
 This Terraform configurations uses the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html) to provision virtual machines on AWS to prepare VMs and deploy [IBM Cloud Private](https://www.ibm.com/cloud-computing/products/ibm-cloud-private/) on them.  This Terraform template automates best practices learned from installing ICP on AWS at numerous client sites in production.
 
-This template provisions an HA cluster with ICP 2.1.0.2 enterprise edition.  We have also verified with ICP 2.1.0.3 enterprise edition with Fixpack 1 applied.  For ICP 2.1.0.3 EE Fixpack release notes, follow [this link](https://www.ibm.com/support/knowledgecenter/SSBS6K_2.1.0.3/getting_started/fix_pack1.html).
+This template (on the [`master` branch](https://github.com/ibm-cloud-architecture/terraform-icp-aws/tree/master)) provisions a highly-available cluster with ICP 3.1.0 Enterprise Edition.
+
+We have also verified with ICP 2.1.0.3 Enterprise Edition with Fixpack 1 applied, with the templates available on the [`2.1.X` branch](https://github.com/ibm-cloud-architecture/terraform-icp-aws/tree/2.1.X).  For ICP 2.1.0.3 EE Fixpack release notes, follow [this link](https://www.ibm.com/support/knowledgecenter/SSBS6K_2.1.0.3/getting_started/fix_pack1.html).
 
 * [Infrastructure Architecture](#infrastructure-architecture)
 * [Terraform Automation](#terraform-automation)
@@ -34,13 +36,17 @@ In a single availability zone, we divide the network into a public subnet which 
 
 1. Create an S3 bucket in the same region that the ICP cluster will be created and upload the ICP binaries.  Make note of the bucket name.  You can use the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/awscli-install-bundle.html) to do this.  
 
+  For ICP 3.1.0-EE, you will need to copy the following:
+  - the ICP binary package tarball (`ibm-cloud-private-x86_64-3.1.0.tar`)
+  - ICP Docker package (`icp-docker-18.03.1_x86_64`)
+
    For ICP 2.1.0.3-EE, you will need to copy the following:
    - the ICP binary package tarball (`ibm-cloud-private-x86_64-2.1.0.3.tar.gz`)
    - ICP Docker package (`icp-docker-17.12.1_x86_64.bin`)
    - The ICP patched installer image (`icp-inception-amd64-2.1.0.3-fp1.tar`)
    - The ICP 2.1.0.3 Fixpack 1 script (`ibm-cloud-private-2.1.0.3-fp1.sh`)
 
-   The ICP patched installater image and Fixpack 1 script can be acquired from [IBM Fix Central](https://www.ibm.com/support/fixcentral/).  
+   The ICP patched installer image and Fixpack 1 script can be acquired from [IBM Fix Central](https://www.ibm.com/support/fixcentral/).  
 
 2. Create a file, `terraform.tfvars` containing the values for the following:
 
