@@ -131,7 +131,7 @@ variable "va" {
 }
 
 variable "instance_name" { default = "icp" }
-variable "icppassword" { default = "MySecretP4ssw0RD" }
+variable "icppassword" { default = "MySecretP4ssw0RDMySecretP4ssw0RD" }
 
 variable "docker_package_location" {
   description = "When installing ICP EE on RedHat. Prefix location string with http: or nfs: to indicate protocol "
