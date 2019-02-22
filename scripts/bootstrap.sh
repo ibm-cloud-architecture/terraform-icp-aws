@@ -157,8 +157,8 @@ image_load() {
       #TODO Is this install directory parameterized?
       IMAGE_DIR=/opt/ibm/cluster/images
       mkdir -p ${IMAGE_DIR}
-      ${awscli} s3 cp ${image_location} ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.0.tar.gz 
-      tar zxf ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.0.tar.gz -O | docker load
+      ${awscli} s3 cp ${image_location} ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.2.tar.gz 
+      tar zxf ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.2.tar.gz -O | docker load
     fi
   fi
 
