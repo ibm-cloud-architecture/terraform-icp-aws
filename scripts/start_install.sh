@@ -65,6 +65,11 @@ if [ -z "${awscli}" ]; then
   export awscli="/usr/local/aws/bin/aws"
 fi
 
+if ! docker --version; then
+  logmsg "Docker is not installed."
+  exit 1
+fi
+
 # Figure out the version
 # This will populate $org $repo and $tag
 parse_icpversion ${inception_image}

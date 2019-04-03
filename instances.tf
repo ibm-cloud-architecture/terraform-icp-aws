@@ -183,7 +183,7 @@ runcmd:
 - /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh functions.sh ${count.index == 0 ? "start_install.sh" : ""} ${count.index == 0 && var.enable_autoscaling ? "create_client_cert.sh" : ""}"
 - /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx 
 ${var.bastion["nodes"] == 0 && count.index == 0 ? "
-- /tmp/icp_scripts/start_install.sh -i ${var.icp_inception_image} -b ${aws_s3_bucket.icp_config_backup.id} ${local.image_package_uri != "" ? "-c ${local.image_package_uri}" : "" }"
+- /tmp/icp_scripts/start_install.sh -i ${local.icp-version} -b ${aws_s3_bucket.icp_config_backup.id} ${local.image_package_uri != "" ? "-c ${local.image_package_uri}" : "" }"
   :
 "" }
 ${var.bastion["nodes"] == 0 && count.index == 0 && var.enable_autoscaling ? "

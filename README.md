@@ -2,9 +2,7 @@
 
 This Terraform configurations uses the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html) to provision virtual machines on AWS to prepare VMs and deploy [IBM Cloud Private](https://www.ibm.com/cloud-computing/products/ibm-cloud-private/) on them.  This Terraform template automates best practices learned from installing ICP on AWS at numerous client sites in production.
 
-This template (on the [`master` branch](https://github.com/ibm-cloud-architecture/terraform-icp-aws/tree/master)) provisions a highly-available cluster with ICP 3.1.0 Enterprise Edition.
-
-We have also verified with ICP 2.1.0.3 Enterprise Edition with Fixpack 1 applied, with the templates available on the [`2.1.X` branch](https://github.com/ibm-cloud-architecture/terraform-icp-aws/tree/2.1.X).  For ICP 2.1.0.3 EE Fixpack release notes, follow [this link](https://www.ibm.com/support/knowledgecenter/SSBS6K_2.1.0.3/getting_started/fix_pack1.html).
+This template (on the [`master` branch](https://github.com/ibm-cloud-architecture/terraform-icp-aws/tree/master)) provisions a highly-available cluster with ICP 3.1.2 Enterprise Edition.  The template uses the [terraform-module-icp-deploy](https://github.com/ibm-cloud-architecture/terraform-module-icp-deploy) sub module to install the cluster once the infrastructure has been prepared.
 
 * [Infrastructure Architecture](#infrastructure-architecture)
 * [Terraform Automation](#terraform-automation)
@@ -14,6 +12,7 @@ We have also verified with ICP 2.1.0.3 Enterprise Edition with Fixpack 1 applied
 * [AWS Cloud Provider](#aws-cloud-provider)
 
 ## Infrastructure Architecture
+
 The following diagram outlines the infrastructure architecture.
 
   ![Infrastructure Architecture](imgs/icp_ha_aw_overview.png?raw=true)
@@ -36,17 +35,9 @@ In a single availability zone, we divide the network into a public subnet which 
 
 1. Create an S3 bucket in the same region that the ICP cluster will be created and upload the ICP binaries.  Make note of the bucket name.  You can use the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/awscli-install-bundle.html) to do this.  
 
-  For ICP 3.1.0-EE, you will need to copy the following:
-  - the ICP binary package tarball (`ibm-cloud-private-x86_64-3.1.0.tar`)
+  For ICP 3.1.2-EE, you will need to copy the following:
+  - the ICP binary package tarball (`ibm-cloud-private-x86_64-3.1.2.tar`)
   - ICP Docker package (`icp-docker-18.03.1_x86_64`)
-
-   For ICP 2.1.0.3-EE, you will need to copy the following:
-   - the ICP binary package tarball (`ibm-cloud-private-x86_64-2.1.0.3.tar.gz`)
-   - ICP Docker package (`icp-docker-17.12.1_x86_64.bin`)
-   - The ICP patched installer image (`icp-inception-amd64-2.1.0.3-fp1.tar`)
-   - The ICP 2.1.0.3 Fixpack 1 script (`ibm-cloud-private-2.1.0.3-fp1.sh`)
-
-   The ICP patched installer image and Fixpack 1 script can be acquired from [IBM Fix Central](https://www.ibm.com/support/fixcentral/).  
 
 2. Create a file, `terraform.tfvars` containing the values for the following:
 
@@ -58,10 +49,12 @@ In a single availability zone, we divide the network into a public subnet which 
 | `ami` | no | Base AMI to use for all EC2 instances.  If none provided, will search for latest version of RHEL 7.5 |
 | `docker_package_location` | no         | S3 URL of the ICP docker package for RHEL (e.g. `s3://<bucket>/<filename>`). Ubuntu will use `docker-ce` from the [Docker apt repository](https://docs.docker.com/install/linux/docker-ce/ubuntu/).  If Docker is already installed in the base AMI, this step will be skipped. |
 | `image_location` | no         | S3 URL of the ICP binary package (e.g. `s3://<bucket>/ibm-cloud-private-x86_64-2.1.0.3.tar.gz`).  Can also be a local path, e.g. `./icp-install/ibm-cloud-private-x86_64-2.1.0.3.tar.gz`; in this case the Terraform automation will create an S3 bucket and upload the binary package.  If provided, the automation will download the binaries from S3 and perform a `docker load` on every instance.  Note that it is faster to create an instance, install docker, perform the `docker load`, and convert to an AMI for use as a base instance for all node role types, as loading docker images takes around 20 minutes per EC2 instance. If the installer image is already on the EC2 instance, this step is skipped. |
-| `patch_images` | no         | A list of S3 URLs for the images to load to each ICP node before installation.  For example, for ICP 2.1.0.3 fixpack 1, this would be `[ "s3://<bucket>/icp-inception-amd64.2.1.0.3.fp1.tar" ]`.  If provided, the automation will download these additional binaries from S3 and perform a `docker load` on every EC2 instance in the ICP cluster. |
-| `patch_scripts` | no         | A list of S3 URLs for the patch scripts to execute after installation completed.  For example, for ICP 2.1.0.3 fixpack 1, this would be `[ "s3://<bucket>/ibm-cloud-private-2.1.0.3-fp1.sh" ]`.  If provided, the automation will download these additional scripts from S3 and execute them in order through the `icp-inception` image as post-install commands. |
-| `icp_inception_image` | no | Name of the bootstrap installation image.  By default it uses `ibmcom/icp-inception:2.1.0.2-ee` to indicate 2.1.0.2 EE, but this will vary in each release.  For ICP 2.1.0.3 EE, you must use the patched installation image `ibmcom/icp-inception:2.1.0.3-ee-fp1`.  You can also install ICP Community edition by specifying `ibmcom/icp-inception:2.1.0.2` for example, |
-| `existing_iam_instance_profile_name` | no | If an IAM role is created beforehand, will assign the role with this name to all EC2 instances. See section on IAM roles for more information on the required policies. If blank, will attempt to create an IAM role.|
+| `icp_inception_image` | no | Name of the bootstrap installation image.  By default it uses `ibmcom/icp-inception-amd64:3.1.2-ee` to indicate 3.1.2 EE, but this will vary in each release.  You can also install ICP Community edition by specifying `ibmcom/icp-inception-amd64:3.1.2` for example, |
+| `registry_server` | no | URL of registry to pull ICP images from, instead of providing S3 bucket URI where binaries are stored. |
+| `registry_username` | no | username to log in to registry server with |
+| `registry_password` | no | password to log in to registry server with |
+| `existing_iam_master_instance_profile_name` | no | If an IAM role is created beforehand, will assign the role with this name to all master node EC2 instances. See section on IAM roles for more information on the required policies. If blank, will attempt to create an IAM role.|
+| `existing_iam_node_instance_profile_name` | no | If an IAM role is created beforehand, will assign the role with this name to all non-master EC2 cluster instances. See section on IAM roles for more information on the required policies. If blank, will attempt to create an IAM role.|
 | `user_provided_cert_dns` | no | The DNS name in a user-provided TLS certificate, if provided |
 
 See [Terraform documentation](https://www.terraform.io/intro/getting-started/variables.html) for the format of this file.
@@ -75,7 +68,7 @@ See [Terraform documentation](https://www.terraform.io/intro/getting-started/var
    export AWS_SECRET_ACCESS_KEY=BAzxcvq^.asdgaljlajdfl235bads
    ```
 
-7. Initialize Terraform using this command.  This will download all dependent modules, including the [ICP installation module](https://github.com/ibm-cloud-architecture/terraform-module-icp-deploy).
+7. Initialize Terraform using this command.  This will download all dependent modules.
 
    ```bash
    terraform init
@@ -95,7 +88,7 @@ To move forward and create the objects, use the following command:
 terraform apply
 ```
 
-This will kick off all infrastructure objects.  Once the infrastructure is created, the installation runs silently on the boot master (i.e. `icp-master01`) until it completes.  To monitor the installation, you can provision a bastion host which is placed on the public subnet and use it as a jumpbox into the `icp-master01` host by setting the number of bastion nodes in `terraform.tfvars` to 1.  
+This will kick off all infrastructure objects.  Once the infrastructure is created, if no bastion host is provisioned, the installation runs on the boot master (i.e. `icp-master01`) until it completes; otherwise the installation will continue synchronously using the bastion host's public IP (by setting the number of bastion nodes in `terraform.tfvars` to 1).  
 
 ```
 bastion = {
@@ -134,40 +127,7 @@ For recovery, master and proxy nodes have Network Interfaces created and attache
 
 #### IAM Configuration
 
-An IAM role is created in AWS and attached to each EC2 instance with the following policy:
-
-```
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "ec2:Describe*",
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "ec2:AttachVolume",
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "ec2:DetachVolume",
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["ec2:*"],
-      "Resource": ["*"]
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["elasticloadbalancing:*"],
-      "Resource": ["*"]
-    }
-  ]
-}
-```
+An IAM role is created in AWS and attached to each EC2 instance.  See [AWS Cloud provider documentation](https://github.com/kubernetes/cloud-provider-aws) for minimum permissions to enable the AWS cloud provider.
 
 *(The Kubernetes AWS Cloud Provider needs access to read information from the AWS API about the instance (i.e. which subnet it's in, the private DNS name, whether nodes that have been removed, etc), and to create LoadBalancers and EBS Volumes on demand.)*
 
@@ -203,7 +163,7 @@ Note that the below are the defaults, and each security group can have its white
 
 #### Load Balancer
 
-*Note that in AWS, the Network LoadBalancer type does not have explicit security groups are instead placed on the instances themselves.*
+*Note that the Network Load Balancer (NLB) used in the terraform template does not have explicit security groups like Application Load Balancers so the security groups are instead placed on the instances themselves.*
 
 - Network LoadBalancer for ICP console
   - listen on 8443, forward to master nodes port 8443 (ICP Console)
@@ -217,13 +177,11 @@ Note that the below are the defaults, and each security group can have its white
 
 #### Route53 DNS Zone
 
-For convenience, a private DNS Zone is created in Route 53.  The domain name can be configured in `variables.tf`; by default it is `<clusterid>.icpcluster.icp`.  The domain search suffixes are added to `resolv.conf`, but due to a bug in cloud-init, `resolv.conf` is overwritten by NetworkManager in RHEL. It should be resolved in a future release of cloud-init.
+A private DNS Zone is created in Route 53.  The domain name can be configured in `variables.tf`; by default it is `<clusterid>.icpcluster.icp`.  The domain search suffixes are added to `resolv.conf`, but due to a bug in cloud-init, `resolv.conf` is overwritten by NetworkManager in RHEL. It should be resolved in a future release of cloud-init.
 
 #### S3 Bucket
 
-1. An S3 Bucket for Configuration is created and the `/opt/ibm/cluster` is uploaded after the cluster is installed.  This is not deleted after an `terraform destroy`.
-2. An S3 bucket is created for ICP installation binaries.  This is not deleted after `terraform destroy`.
-3. An S3 bucket is created for ICP image registry storage.
+An S3 Bucket for Configuration is created and the `/opt/ibm/cluster` is uploaded after the cluster is installed.  This is not deleted after an `terraform destroy`.
 
 #### Auto-scaling group (BETA)
 
@@ -262,10 +220,8 @@ The following parameters are required settings to install IBM Cloud Private Comm
 
 ```
 image_location = ""
-patch_images = []
-patch_scripts = []
 
-icp_inception_image = "ibmcom/icp-inception-amd64:3.1.0"
+icp_inception_image = "ibmcom/icp-inception-amd64:3.1.2"
 
 bastion = {
  nodes = "1"

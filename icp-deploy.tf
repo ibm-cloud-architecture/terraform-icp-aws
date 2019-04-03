@@ -154,7 +154,7 @@ resource "null_resource" "start_install" {
 
     inline = [
       "while [ ! -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done",
-      "sudo /tmp/icp_scripts/start_install.sh -i ${var.icp_inception_image} -b ${aws_s3_bucket.icp_config_backup.id} ${local.image_package_uri != "" ? "-c ${local.image_package_uri}" : "" }"
+      "sudo /tmp/icp_scripts/start_install.sh -i ${local.icp-version} -b ${aws_s3_bucket.icp_config_backup.id} ${local.image_package_uri != "" ? "-c ${local.image_package_uri}" : "" }"
     ]
   }
 }
