@@ -4,9 +4,13 @@ resource "random_id" "clusterid" {
 }
 
 locals  {
-  iam_ec2_instance_profile_id = "${var.existing_ec2_iam_instance_profile_name != "" ?
-        var.existing_ec2_iam_instance_profile_name :
-        element(concat(aws_iam_instance_profile.icp_ec2_instance_profile.*.id, list("")), 0)}"
+  iam_ec2_master_instance_profile_id = "${var.existing_ec2_iam_master_instance_profile_name != "" ?
+        var.existing_ec2_iam_master_instance_profile_name :
+        element(concat(aws_iam_instance_profile.icp_ec2_master_instance_profile.*.id, list("")), 0)}"
+  iam_ec2_node_instance_profile_id = "${var.existing_ec2_iam_node_instance_profile_name != "" ?
+        var.existing_ec2_iam_node_instance_profile_name :
+        element(concat(aws_iam_instance_profile.icp_ec2_node_instance_profile.*.id, list("")), 0)}"
+
   efs_audit_mountpoints = "${concat(aws_efs_mount_target.icp-audit.*.dns_name, list(""))}"
   efs_registry_mountpoints = "${concat(aws_efs_mount_target.icp-registry.*.dns_name, list(""))}"
   image_package_uri = "${substr(var.image_location, 0, min(2, length(var.image_location))) == "s3" ?
@@ -103,6 +107,12 @@ resource "aws_instance" "bastion" {
 fqdn: ${format("${var.instance_name}-bastion%02d", count.index + 1)}.${random_id.clusterid.hex}.${var.private_domain}
 users:
 - default
+- name: icpdeploy
+  groups: [ wheel ]
+  sudo: [ "ALL=(ALL) NOPASSWD:ALL" ]
+  shell: /bin/bash
+  ssh-authorized-keys:
+  - ${tls_private_key.installkey.public_key_openssh}
 manage_resolv_conf: true
 resolv_conf:
   nameservers: [ ${cidrhost(element(aws_subnet.icp_private_subnet.*.cidr_block, count.index), 2)}]
@@ -115,13 +125,9 @@ EOF
 resource "aws_instance" "icpmaster" {
   depends_on = [
     "aws_route_table_association.a",
-    "null_resource.icp_install_package",
-    "aws_s3_bucket_object.docker_install_package",
-    "aws_s3_bucket_object.hostfile",
     "aws_s3_bucket_object.icp_cert_crt",
     "aws_s3_bucket_object.icp_cert_key",
     "aws_s3_bucket_object.icp_config_yaml",
-    "aws_s3_bucket_object.ssh_key",
     "aws_s3_bucket_object.bootstrap",
     "aws_s3_bucket_object.create_client_cert",
     "aws_s3_bucket_object.functions",
@@ -152,7 +158,7 @@ resource "aws_instance" "icpmaster" {
     device_index = 0
   }
 
-  iam_instance_profile = "${local.iam_ec2_instance_profile_id}"
+  iam_instance_profile = "${local.iam_ec2_master_instance_profile_id}"
 
 
   tags = "${merge(
@@ -175,12 +181,12 @@ write_files:
   content: ${base64encode(file("${path.module}/scripts/bootstrap-node.sh"))}
 runcmd:
 - /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh functions.sh ${count.index == 0 ? "start_install.sh" : ""} ${count.index == 0 && var.enable_autoscaling ? "create_client_cert.sh" : ""}"
-- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx ${local.image_package_uri != "" ? "-i ${local.image_package_uri}" : "" } -s ${var.icp_inception_image} ${length(var.patch_images) > 0 ? "-a \"${join(" ", var.patch_images)}\"" : "" }
-${count.index == 0 ? "
-- /tmp/icp_scripts/start_install.sh -i ${var.icp_inception_image} -c ${aws_s3_bucket.icp_config_backup.id} -r ${aws_s3_bucket.icp_registry.id} ${length(var.patch_scripts) > 0 ? "-s \"${join(" ", var.patch_scripts)}\"" : "" }"
+- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx 
+${var.bastion["nodes"] == 0 && count.index == 0 ? "
+- /tmp/icp_scripts/start_install.sh -i ${var.icp_inception_image} -b ${aws_s3_bucket.icp_config_backup.id} ${local.image_package_uri != "" ? "-c ${local.image_package_uri}" : "" }"
   :
 "" }
-${count.index == 0 && var.enable_autoscaling ? "
+${var.bastion["nodes"] == 0 && count.index == 0 && var.enable_autoscaling ? "
 - /tmp/icp_scripts/create_client_cert.sh -i ${var.icp_inception_image} -b ${aws_s3_bucket.icp_config_backup.id}"
   :
 "" }
@@ -212,9 +218,7 @@ EOF
 resource "aws_instance" "icpproxy" {
   depends_on = [
     "aws_route_table_association.a",
-    "null_resource.icp_install_package",
     "aws_s3_bucket_object.bootstrap",
-    "aws_s3_bucket_object.docker_install_package"
   ]
 
   count         = "${var.proxy["nodes"]}"
@@ -241,7 +245,7 @@ resource "aws_instance" "icpproxy" {
     device_index = 0
   }
 
-  iam_instance_profile = "${local.iam_ec2_instance_profile_id}"
+  iam_instance_profile = "${local.iam_ec2_node_instance_profile_id}"
 
   tags = "${merge(
     var.default_tags,
@@ -264,7 +268,7 @@ write_files:
   content: ${base64encode(file("${path.module}/scripts/bootstrap-node.sh"))}
 runcmd:
 - /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh"
-- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx ${local.image_package_uri != "" ? "-i ${local.image_package_uri}" : "" } -s ${var.icp_inception_image} ${length(var.patch_images) > 0 ? "-a \"${join(" ", var.patch_images)}\"" : "" }
+- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx 
 users:
 - default
 - name: icpdeploy
@@ -286,9 +290,7 @@ EOF
 resource "aws_instance" "icpmanagement" {
   depends_on = [
     "aws_route_table_association.a",
-    "null_resource.icp_install_package",
     "aws_s3_bucket_object.bootstrap",
-    "aws_s3_bucket_object.docker_install_package"
   ]
 
   count         = "${var.management["nodes"]}"
@@ -314,7 +316,7 @@ resource "aws_instance" "icpmanagement" {
     volume_type       = "gp2"
   }
 
-  iam_instance_profile = "${local.iam_ec2_instance_profile_id}"
+  iam_instance_profile = "${local.iam_ec2_node_instance_profile_id}"
 
   tags = "${merge(
     var.default_tags,
@@ -336,7 +338,7 @@ write_files:
   content: ${base64encode(file("${path.module}/scripts/bootstrap-node.sh"))}
 runcmd:
 - /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh"
-- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx ${local.image_package_uri != "" ? "-i ${local.image_package_uri}" : "" } -s ${var.icp_inception_image} ${length(var.patch_images) > 0 ? "-a \"${join(" ", var.patch_images)}\"" : "" }
+- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx 
 users:
 - default
 - name: icpdeploy
@@ -358,9 +360,7 @@ EOF
 resource "aws_instance" "icpva" {
   depends_on = [
     "aws_route_table_association.a",
-    "null_resource.icp_install_package",
     "aws_s3_bucket_object.bootstrap",
-    "aws_s3_bucket_object.docker_install_package"
   ]
 
   count         = "${var.va["nodes"]}"
@@ -386,7 +386,7 @@ resource "aws_instance" "icpva" {
     volume_type       = "gp2"
   }
 
-  iam_instance_profile = "${local.iam_ec2_instance_profile_id}"
+  iam_instance_profile = "${local.iam_ec2_node_instance_profile_id}"
 
   tags = "${merge(
     var.default_tags,
@@ -408,7 +408,7 @@ write_files:
   content: ${base64encode(file("${path.module}/scripts/bootstrap-node.sh"))}
 runcmd:
 - /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh"
-- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx ${local.image_package_uri != "" ? "-i ${local.image_package_uri}" : "" } -s ${var.icp_inception_image} ${length(var.patch_images) > 0 ? "-a \"${join(" ", var.patch_images)}\"" : "" }
+- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx 
 users:
 - default
 - name: icpdeploy
@@ -434,9 +434,7 @@ resource "aws_instance" "icpnodes" {
   # Make sure the nodes will have internet access before provisioning
   depends_on = [
     "aws_route_table_association.a",
-    "null_resource.icp_install_package",
     "aws_s3_bucket_object.bootstrap",
-    "aws_s3_bucket_object.docker_install_package"
   ]
 
   key_name      = "${var.key_name}"
@@ -449,7 +447,7 @@ resource "aws_instance" "icpnodes" {
 
   availability_zone = "${format("%s%s", element(list(var.aws_region), count.index), element(var.azs, count.index))}"
 
-  iam_instance_profile = "${local.iam_ec2_instance_profile_id}"
+  iam_instance_profile = "${local.iam_ec2_node_instance_profile_id}"
 
   ebs_optimized = "${var.worker["ebs_optimized"]}"
   root_block_device {
@@ -483,7 +481,7 @@ write_files:
   content: ${base64encode(file("${path.module}/scripts/bootstrap-node.sh"))}
 runcmd:
 - /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh"
-- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx ${local.image_package_uri != "" ? "-i ${local.image_package_uri}" : "" } -s ${var.icp_inception_image} ${length(var.patch_images) > 0 ? "-a \"${join(" ", var.patch_images)}\"" : "" }
+- /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx 
 users:
 - default
 - name: icpdeploy

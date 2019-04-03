@@ -17,12 +17,11 @@ module "icpautoscaling" {
 
     source = "./autoscaling"
 
-    ec2_iam_instance_profile_id = "${local.iam_ec2_instance_profile_id}"
+    ec2_iam_instance_profile_id = "${local.iam_ec2_node_instance_profile_id}"
     existing_lambda_iam_instance_profile_name = "${var.existing_lambda_iam_instance_profile_name}"
     cluster_id = "${random_id.clusterid.hex}"
 
     #icpuser         = "aws_lb_target_group_attachment.master-8001.arn" // attempt at workaround for missing depends on
-    awscli          = "${path.module}/awscli/bin/aws"
 
     kube_api_url    = "https://${aws_lb.icp-console.dns_name}:8001"
 

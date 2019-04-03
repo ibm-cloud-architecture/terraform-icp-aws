@@ -1,4 +1,17 @@
 #!/bin/bash
+logfile="/tmp/icp_logs/bootstrap.log"
+
+# Create logs directory.
+[ -d /tmp/icp_logs ] || mkdir /tmp/icp_logs
+
+#
+# Function for logging output.
+#
+logmsg() {
+  hostname=`hostname`;
+  date=`date +"%m-%d-%y %r"`;
+  echo $date $hostname $1 | tee -a $logfile
+}
 
 ubuntu_install(){
   # attempt to retry apt-get update until cloud-init gives up the apt lock
@@ -35,25 +48,29 @@ crlinux_install() {
 
 awscli=/usr/local/bin/aws
 
+#
+# This function will install docker on the node.
+#
 docker_install() {
-  echo "Install docker from ${package_location}"
-  sourcedir=/tmp/icp-docker
-
+  logmsg "Checking docker install status."
   if docker --version; then
-    echo "Docker already installed. Exiting"
+    logmsg "Docker already installed. Exiting"
     return 0
   fi
 
   # Figure out if we're asked to install at all
-  if [[ ! -z ${package_location} ]]; then
+  if [[ ! -z ${docker_installer} ]]; then
+    logmsg "Install docker from ${docker_installer}"
+    sourcedir=/tmp/icp-docker
+
     mkdir -p ${sourcedir}
 
     # Decide which protocol to use
-    if [[ "${package_location:0:2}" == "s3" ]]
+    if [[ "${docker_installer:0:2}" == "s3" ]]
     then
       # Figure out what we should name the file
       filename="icp-docker.bin"
-      /usr/local/bin/aws s3 cp ${package_location} ${sourcedir}/${filename}
+      /usr/local/bin/aws s3 cp ${docker_installer} ${sourcedir}/${filename}
       package_file="${sourcedir}/${filename}"
     fi
 
@@ -82,7 +99,7 @@ docker_install() {
 
   systemctl enable docker
   storage_driver=`docker info | grep 'Storage Driver:' | cut -d: -f2 | sed -e 's/\s//g'`
-  echo "storage driver is ${storage_driver}"
+  logmsg "storage driver is ${storage_driver}"
   if [ "${storage_driver}" == "devicemapper" ]; then
     systemctl stop docker
 
@@ -104,7 +121,7 @@ EOF
   fi
 
   if [ ! -z "${docker_disk}" ]; then
-    echo "Setting up ${docker_disk} and mounting at /var/lib/docker ..."
+    logmsg "Setting up ${docker_disk} and mounting at /var/lib/docker ..."
     systemctl stop docker
 
     sudo mv /var/lib/docker /var/lib/docker.bk
@@ -114,7 +131,7 @@ EOF
     sudo partprobe
 
     sudo mkfs.xfs -n ftype=1 ${docker_disk}1
-    echo "${docker_disk}1  /var/lib/docker   xfs  defaults   0 0" | sudo tee -a /etc/fstab
+    logmsg "${docker_disk}1  /var/lib/docker   xfs  defaults   0 0" | sudo tee -a /etc/fstab
     sudo mount -a
 
     sudo mv /var/lib/docker.bk/* /var/lib/docker
@@ -130,70 +147,33 @@ EOF
       break
     fi
 
-    echo "Docker is not active yet; waiting 3 seconds"
+    logmsg "Docker is not active yet; waiting 3 seconds"
     sleep 3
     _count=$((_count+1))
 
     if [ ${_count} -gt 10 ]; then
-      echo "Docker not active after 30 seconds"
+      logmsg "Docker not active after 30 seconds"
       return 1
     fi
   done
 
-  echo "Docker is installed."
+  logmsg "Docker is installed."
   docker info
 }
 
-image_load() {
-  if [[ ! -z $(docker images -q ${inception_image}) ]]; then
-    # If we don't have an image locally we'll pull from docker hub registry
-    echo "Not required to load images. Exiting"
-    return 0
-  fi
-
-  if [[ ! -z "${image_location}" ]]; then
-    if [[ "${image_location:0:2}" == "s3" ]]; then
-      echo "Load docker images from ${image_location} ..."
-      #TODO Is this install directory parameterized?
-      IMAGE_DIR=/opt/ibm/cluster/images
-      mkdir -p ${IMAGE_DIR}
-      ${awscli} s3 cp ${image_location} ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.0.tar.gz 
-      tar zxf ${IMAGE_DIR}/ibm-cloud-private-x86_64-3.1.0.tar.gz -O | docker load
-    fi
-  fi
-
-  # if additional patches specified, load the images now
-  for img in `echo "${s3_patch_images}"`; do
-    echo "Load docker images from ${img} ..."
-    if echo ${img} | grep 'tar$'; then
-      ${awscli} s3 cp ${img} - | docker load
-    elif echo ${img} | grep 't.*gz$'; then
-      ${awscli} s3 cp ${img} - | tar zxf - -O | docker load
-    fi
-  done
-}
+logmsg "~~~~~~~~~~~~~ Bootstrap.sh starting. ~~~~~~~~~~~~~~~~"
 
 ##### MAIN #####
-while getopts ":a:p:d:i:s:" arg; do
+while getopts ":p:d:i:s:e:" arg; do
     case "${arg}" in
-      a)
-        s3_patch_images=${OPTARG}
-        ;;
       p)
-        package_location=${OPTARG}
+        docker_installer=${OPTARG}
         ;;
       d)
         docker_disk=${OPTARG}
         ;;
-      i)
-        image_location=${OPTARG}
-        ;;
-      s)
-        inception_image=${OPTARG}
-        ;;
     esac
 done
-
 
 #Find Linux Distro
 if grep -q -i ubuntu /etc/*release; then
@@ -210,7 +190,7 @@ else
   crlinux_install
 fi
 
+# Install Docker
 docker_install
-image_load
 
-echo "Complete.."
+logmsg "~~~~~~~~~~~~~ Bootstrap.sh complete. ~~~~~~~~~~~~~~~~"

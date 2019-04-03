@@ -84,10 +84,6 @@ variable "icp_inception_image" {
   default     = "ibmcom/icp-inception:2.1.0.2-ee"
 }
 
-variable "awscli" {
-  default = ""
-}
-
 variable "lambda_s3_bucket" {
   default = ""
 }

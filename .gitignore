@@ -27,6 +27,7 @@ override.tf.json
 # !example_override.tf
 
 awscli/*
+autoscaling/lambda.zip
 =======
 # .tfvars files
 *.tfvars
