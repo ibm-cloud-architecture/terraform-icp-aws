@@ -88,7 +88,17 @@ To move forward and create the objects, use the following command:
 terraform apply
 ```
 
-This will kick off all infrastructure objects.  Once the infrastructure is created, if no bastion host is provisioned, the installation runs on the boot master (i.e. `icp-master01`) until it completes; otherwise the installation will continue synchronously using the bastion host's public IP (by setting the number of bastion nodes in `terraform.tfvars` to 1).  
+The following diagram illustrates the process:
+
+![terraform install](imgs/terraform_icp_install.png)
+
+1. Terraform creates the infrastructure objects including EC2 instances.  
+2. The scripts in the `scripts` directory will be uploaded to an S3 bucket 
+3. The EC2 instances are configured with [cloud-init](https://cloud-init.io/) to retrieve the scripts from the S3 bucket on startup.  The `bootstrap.sh` script is executed silently on every node and bootstraps each node (install docker, prepare storage, etc).  
+4. A configuration file (`terraform.tfvars`) is generated from the outputs of the infrastructure for the [terraform-module-icp-deploy](https://github.com/ibm-cloud-architecture/terraform-module-icp-deploy) module and copied to the S3 bucket.
+5. The `start_install.sh` script is run on the first ICP master host, which clones the github module, downloads the `terraform.tfvars` file from the S3 bucket, and runs `terraform apply` in a docker container that triggers the rest of the ICP installation.  
+
+If no bastion host is provisioned, the installation runs silently on the boot master (i.e. `icp-master01`) using [cloud-init](https://cloud-init.io/) until it completes; otherwise the installation will continue synchronously using the bastion host's public IP (by setting the number of bastion nodes in `terraform.tfvars` to 1).  
 
 ```
 bastion = {
@@ -96,7 +106,7 @@ bastion = {
 }
 ```
 
-The installation output will be written to `/var/log/cloud-init-output.log` for RHEL 7.4 systems and `/var/log/messages` on RHEL 7.5+ systems.  Bastion hosts are not required for normal operation of the cluster.
+The installation output will be written to `/tmp/icp_logs/start_install.log` on the first master.  Bastion hosts are not required for normal operation of the cluster, but may be desired if you want to synchronously wait for the installation to complete, such as in execution from a devops pipeline.
 
 When the installation completes,  the `/opt/ibm/cluster` directory on the boot master (i.e. `icp-master01`) is backed up to S3 in a bucket named `icpbackup-<clusterid>`, which can be used in master recovery in case one of the master nodes fails.  It is recommended after every time `terraform apply` is performed, to commit the `terraform.tfstate` into a backend so that the state is stored in source control.
 

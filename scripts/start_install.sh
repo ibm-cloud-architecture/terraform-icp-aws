@@ -13,36 +13,6 @@ logmsg() {
   echo $date $hostname $1 | tee -a $logfile
 }
 
-#
-# This function will populate the local Docker repository with the ICP images.
-#
-image_load() {
-  if [[ ! -z $(docker images -q ${inception_image}) ]]; then
-    # If we don't have an image locally we'll pull from docker hub registry
-    logmsg "Not required to load images. Exiting"
-    return 0
-  fi
-
-  if [[ ! -z "${image_location}" ]]; then
-    # Decide which protocol to use
-    if [[ "${image_location:0:2}" == "s3" ]]; then
-      # stream it right out of s3 into docker
-      logmsg "Copying binary package from ${image_location} ..."
-      ${awscli} s3 cp ${image_location} /tmp 
-
-      logmsg "Loading docker images from /tmp/`basename ${image_location}` ..."
-      tar zxf /tmp/`basename ${image_location}` -O | docker load | tee -a $logfile
-
-      logmsg "Copying binary package to /opt/ibm/cluster/images ..."
-      mkdir -p /opt/ibm/cluster/images
-      mv /tmp/`basename ${image_location}` /opt/ibm/cluster/images
-
-      logmsg "Completed loading docker images from ${image_location} ..."
-    fi
-  fi
-}
-
-
 logmsg "~~~~~~~~ Starting ICP installation Code ~~~~~~~~"
 
 ##### MAIN #####
@@ -66,14 +36,13 @@ if [ -z "${awscli}" ]; then
 fi
 
 if ! docker --version; then
-  logmsg "Docker is not installed."
+  logmsg "ERROR: Docker is not installed."
   exit 1
 fi
 
 # Figure out the version
 # This will populate $org $repo and $tag
 parse_icpversion ${inception_image}
-logmsg "Populating the registry."
 logmsg "registry=${registry:-not specified} org=$org repo=$repo tag=$tag"
 
 if [ ! -z "${username}" -a ! -z "${password}" ]; then
@@ -84,7 +53,30 @@ if [ ! -z "${username}" -a ! -z "${password}" ]; then
 fi
 
 # load images
-image_load
+if [[ ! -z $(docker images -q ${inception_image}) ]]; then
+  # If we don't have an image locally we'll pull from docker hub registry
+  logmsg "Not required to load images. Exiting"
+  return 0
+fi
+
+if [[ ! -z "${image_location}" ]]; then
+  # Decide which protocol to use
+  if [[ "${image_location:0:2}" == "s3" ]]; then
+    # stream it right out of s3 into docker
+    logmsg "Copying binary package from ${image_location} ..."
+    ${awscli} s3 cp ${image_location} /tmp 
+
+    logmsg "Loading docker images from /tmp/`basename ${image_location}` ..."
+    tar zxf /tmp/`basename ${image_location}` -O | docker load | tee -a $logfile
+
+    logmsg "Copying binary package to /opt/ibm/cluster/images ..."
+    mkdir -p /opt/ibm/cluster/images
+    mv /tmp/`basename ${image_location}` /opt/ibm/cluster/images
+
+    logmsg "Completed loading docker images from ${image_location} ..."
+  fi
+fi
+
 
 inception_image=${registry}${registry:+/}${org}/${repo}:${tag}
 

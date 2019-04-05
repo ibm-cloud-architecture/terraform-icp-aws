@@ -142,6 +142,12 @@ resource "tls_private_key" "installkey" {
 
 # kick off the installer from the bastion node, if one exists.  otherwise it will get kicked off from cloud-init
 resource "null_resource" "start_install" {
+  # trigger a reinstall if the cluster config changes
+  triggers {
+    terraform_tfvars_contents = "${aws_s3_bucket_object.terraform_tfvars.content}"
+    icp_config_yaml_contents = "${aws_s3_bucket_object.icp_config_yaml.content}"
+  }
+
   count = "${var.bastion["nodes"] != 0 ? 1 : 0}"
   
   provisioner "remote-exec" {
