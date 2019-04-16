@@ -157,7 +157,7 @@ variable "patch_scripts" {
 
 variable "icp_inception_image" {
   description = "icp-inception bootstrap image repository"
-  default     = "ibmcom/icp-inception:2.1.0.2-ee"
+  default     = "ibmcom/icp-inception:2.1.0.3-ee"
 }
 
 variable "icp_config_yaml" {
