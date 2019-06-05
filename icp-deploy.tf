@@ -99,7 +99,7 @@ icp_configuration = {
   cluster_CA_domain               = "${var.user_provided_cert_dns != "" ? var.user_provided_cert_dns : aws_lb.icp-console.dns_name}"
   cluster_name                    = "${var.instance_name}-${random_id.clusterid.hex}-cluster"
   calico_ip_autodetection_method  = "can-reach=${element(aws_network_interface.mastervip.*.private_ip, 0)}"
-  kubelet_nodename                = "fqdn"
+  kubelet_nodename                = "nodename"
 ${var.use_aws_cloudprovider ? "
   cloud_provider                  = \"aws\"" : "" }
   calico_tunnel_mtu               = "8981"
