@@ -5,7 +5,7 @@ image_location = ""
 
 ami = "ubuntu"         # Use Ubuntu to simplify Docker installation on simple PoC
 
-icp_inception_image = "ibmcom/icp-inception-amd64:3.1.2"
+icp_inception_image = "ibmcom/icp-inception:3.2.0"
 
 bastion = {
  nodes = "1"
