@@ -22,12 +22,22 @@ jobs:
           command: terraform init
       - run:
           name: Plan
-          command: terraform plan -var-file=terraform-icp-ce-example.tfvars -out=mydeployment
+          command: |
+            terraform plan -var-file=terraform-icp-ce-example.tfvars -out=icp-ce-ubuntu
+            terraform plan -var-file=terraform-icp-ce-rhel-example.tfvars -out=icp-ce-rhel
       - run:
-          name: Deploy and destroy
+          name: Deploy and destroy ICP CE Ubuntu
           command: |
             set +e
-            terraform apply mydeployment
+            terraform apply icp-ce-ubuntu
+            aplyval=$?
+            terraform destroy -force
+            return ${aplyval}
+      - run:
+          name: Deploy and destroy ICP CE RHEL
+          command: |
+            set +e
+            terraform apply icp-ce-rhel
             aplyval=$?
             terraform destroy -force
             return ${aplyval}
