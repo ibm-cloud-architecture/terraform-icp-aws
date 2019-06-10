@@ -1,44 +1,49 @@
-version: 2
+version: 2.1
 jobs:
   build:
     docker:
       - image: hashicorp/terraform:0.11.14
+    parameters:
+      tfvarsfile:
+        type: string
+        default: notspecified
+    environment:
+      - TF_VAR_aws_region: eu-west-1
+      - tfstatebucket: circlecitfstate
+      - tfstatedir: circledeployments
+      - tfstateregion: us-east-2
     steps:
       - checkout
       - run:
-          name: Make backend
+          name: Make backend for << parameters.tfvarsfile >>
           command: |
-            cat <<EOF > backend_override.tf
+            cat \<<EOF > backend_override.tf
               terraform {
                   backend "s3" {
                     bucket = "${tfstatebucket}"
-                    key    = "circledeployments/${CIRCLE_BUILD_NUM}"
+                    key    = "${tfstatedir}/${CIRCLE_BUILD_NUM}-<< parameters.tfvarsfile >>.tfstate"
                     region = "${tfstateregion}"
                   }
                 }
             EOF
+      - run: terraform init
       - run:
-          name: Terraform init
-          command: terraform init
+          name: terraform plan
+          command: terraform plan -var-file=<< parameters.tfvarsfile >> -out=mybuild
       - run:
-          name: Plan ICP CE Ubuntu
-          command: terraform plan -var-file=terraform-icp-ce-example.tfvars -out=icp-ce-ubuntu
+          name: terraform apply
+          command: terraform apply "mybuild"
       - run:
-          name: Deploy and destroy ICP CE Ubuntu
-          command: |
-            set +e
-            terraform apply icp-ce-ubuntu
-            aplyval=$?
-            terraform destroy -force
-            return ${aplyval}
-      - run:
-          name: Plan ICP CE RHEL
-          command: terraform plan -var-file=terraform-icp-ce-rhel-example.tfvars -out=icp-ce-rhel
-      - run:
-          name: Deploy and destroy ICP CE RHEL
-          command: |
-            set +e
-            terraform apply icp-ce-rhel
-            aplyval=$?
-            terraform destroy -force
-            return ${aplyval}
+          name: terraform destroy
+          command: terraform destroy -force
+          when: always
+workflows:
+  workflow:
+    jobs:
+      - build:
+          tfvarsfile: terraform-icp-ce-example.tfvars
+      - build:
+          requires:
+            - build
+          tfvarsfile: terraform-icp-ce-example.tfvars
+      # Repeated as many times as there are configurations...
