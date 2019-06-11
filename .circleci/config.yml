@@ -1,4 +1,22 @@
 version: 2.1
+commands:
+  # CircleCI generally only triggers builds on commits to the main repository,
+  # so PRs coming from branches of the main repo simply reference builds for existing commits
+  # (CIRCLE_BRANCH=branchname and CIRCLE_PR_NUMBER is unset);
+  # The only time PRs will trigger a build is when the PR is referencing a fork
+  # (CIRCLE_BRANCH=pull/XXX and CIRCLE_PR_NUMBER=XXX).
+  early_return_for_forked_pull_requests:
+    description: >-
+      If this build is from a fork, stop executing the current job and return success.
+      This is useful to avoid steps that will fail due to missing credentials.
+    steps:
+      - run:
+          name: Early return if this build is from a forked PR
+          command: |
+            if [ -n "$CIRCLE_PR_NUMBER" ]; then
+              echo "Will not deploy PRs, so marking this step successful"
+              circleci step halt
+            fi
 jobs:
   build:
     docker:
@@ -27,6 +45,8 @@ jobs:
                 }
             EOF
       - run: terraform init
+      - run: terraform validate
+      - early_return_for_forked_pull_requests
       - run:
           name: terraform plan
           command: terraform plan -var-file=<< parameters.tfvarsfile >> -out=mybuild
