@@ -1,3 +1,5 @@
+TESTING A CHANGE!! 
+
 # Terraform Highly Available ICP Deployment on AWS
 
 This Terraform configurations uses the [AWS provider](https://www.terraform.io/docs/providers/aws/index.html) to provision virtual machines on AWS to prepare VMs and deploy [IBM Cloud Private](https://www.ibm.com/cloud-computing/products/ibm-cloud-private/) on them.  This Terraform template automates best practices learned from installing ICP on AWS at numerous client sites in production.
