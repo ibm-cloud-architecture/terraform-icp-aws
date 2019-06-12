@@ -44,7 +44,7 @@ jobs:
                   }
                 }
             EOF
-      - run: echo "foobar!"
+      - run: echo -e "foo\nbar\nbaz\n... ... ..."
       - run: terraform init
       - run: terraform validate
       - early_return_for_forked_pull_requests
