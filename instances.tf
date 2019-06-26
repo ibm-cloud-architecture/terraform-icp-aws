@@ -128,7 +128,8 @@ resource "aws_instance" "icpmaster" {
     "aws_s3_bucket_object.bootstrap",
     "aws_s3_bucket_object.create_client_cert",
     "aws_s3_bucket_object.functions",
-    "aws_s3_bucket_object.start_install"
+    "aws_s3_bucket_object.start_install",
+    "aws_instance.icpnodes"
   ]
 
   count         = "${var.master["nodes"]}"
