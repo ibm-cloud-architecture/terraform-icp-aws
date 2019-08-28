@@ -124,7 +124,11 @@ icp_config_file = "./icp-terraform-config.yaml"
 # We will let terraform generate a new ssh keypair
 # for boot master to communicate with worker and proxy nodes
 # during ICP deployment
-generate_key = true
+generate_key = false
+icp_pub_key = "${chomp(tls_private_key.installkey.public_key_openssh)}"
+icp_priv_key = <<EOKEY
+${tls_private_key.installkey.private_key_pem}
+EOKEY
 
 # SSH user and key for terraform to connect to newly created VMs
 # ssh_key is the private key corresponding to the public assumed to be included in the template
@@ -132,9 +136,25 @@ ssh_user        = "icpdeploy"
 ssh_key_base64  = "${base64encode(tls_private_key.installkey.private_key_pem)}"
 ssh_agent       = false
 
+hooks = {
+  cluster-preconfig  = ["echo -n"]
+  cluster-postconfig = ["echo -n"]
+  boot-preconfig     = ["echo -n"]
+  preinstall         = ["echo -n"]
+  postinstall        = [
+    "sudo /tmp/icp_scripts/create_client_cert.sh -b ${local.lambda_s3_bucket} -i ${var.icp_inception_image} -k ${aws_network_interface.mastervip.0.private_ip}",
+    "/usr/local/bin/aws autoscaling set-desired-capacity --auto-scaling-group-name icp-worker-asg-${random_id.clusterid.hex} --region ${var.aws_region} --desired-capacity 1"
+  ]
+}
+
 EOF
 }
 
+resource "aws_s3_bucket_object" "ssh_key" {
+  bucket = "${aws_s3_bucket.icp_config_backup.id}"
+  key    = "ssh_key"
+  content = "${tls_private_key.installkey.private_key_pem}"
+}
 
 resource "tls_private_key" "installkey" {
   algorithm   = "RSA"

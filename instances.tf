@@ -19,7 +19,7 @@ locals  {
   docker_package_uri = "${substr(var.docker_package_location, 0, min(2, length(var.docker_package_location))) == "s3" ?
     var.docker_package_location :
       var.docker_package_location == "" ? "" : "s3://${element(concat(aws_s3_bucket.icp_binaries.*.id, list("")), 0)}/icp-docker.bin"}"
-  lambda_s3_bucket = "${element(concat(aws_s3_bucket.icp_lambda.*.id, list("")), 0)}"
+  lambda_s3_bucket = "${var.enable_autoscaling ? element(concat(aws_s3_bucket.icp_lambda.*.id, list("")), 0) : "" }"
   default_searched_ami = {
     "ubuntu"  = "${data.aws_ami.ubuntu.id}"
     "rhel"    = "${data.aws_ami.rhel.id}"
@@ -179,14 +179,14 @@ write_files:
   content: ${base64encode(file("${path.module}/scripts/bootstrap-node.sh"))}
 runcmd:
 - hostnamectl set-hostname $(curl http://169.254.169.254/2016-09-02/meta-data/local-hostname)
-- /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh functions.sh ${count.index == 0 ? "start_install.sh" : ""} ${count.index == 0 && var.enable_autoscaling ? "create_client_cert.sh" : ""}"
+- /tmp/bootstrap-node.sh -c ${aws_s3_bucket.icp_config_backup.id} -s "bootstrap.sh functions.sh ${count.index == 0 ? "start_install.sh" : ""} ${count.index == 0 && var.enable_autoscaling ? "create_client_cert.sh asg-configmap.yaml cluster-autoscaler-rbac.yaml cluster-autoscaler-deployment.yaml" : ""}"
 - /tmp/icp_scripts/bootstrap.sh ${local.docker_package_uri != "" ? "-p ${local.docker_package_uri}" : "" } -d /dev/xvdx
 ${var.bastion["nodes"] == 0 && count.index == 0 ? "
 - /tmp/icp_scripts/start_install.sh -i ${local.icp-version} -b ${aws_s3_bucket.icp_config_backup.id} ${local.image_package_uri != "" ? "-c ${local.image_package_uri}" : "" }"
   :
 "" }
 ${var.bastion["nodes"] == 0 && count.index == 0 && var.enable_autoscaling ? "
-- /tmp/icp_scripts/create_client_cert.sh -i ${var.icp_inception_image} -b ${aws_s3_bucket.icp_config_backup.id}"
+- /tmp/icp_scripts/create_client_cert.sh -i ${var.icp_inception_image} -b ${aws_s3_bucket.icp_config_backup.id} -k ${aws_network_interface.mastervip.0.private_ip}"
   :
 "" }
 ${var.master["nodes"] > 1 ? "

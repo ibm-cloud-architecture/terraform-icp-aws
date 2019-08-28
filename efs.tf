@@ -3,7 +3,7 @@ resource "aws_efs_file_system" "icp-registry" {
   creation_token = "icp-${random_id.clusterid.hex}-registry"
   tags = "${merge(
     var.default_tags,
-    map("Name", "icp-registry")
+    map("Name", "${format("icp-${random_id.clusterid.hex}-registry")}")
   )}"
 }
 
@@ -19,7 +19,7 @@ resource "aws_efs_file_system" "icp-audit" {
   creation_token = "icp-${random_id.clusterid.hex}-audit"
   tags = "${merge(
     var.default_tags,
-    map("Name", "icp-audit")
+    map("Name", "${format("icp-${random_id.clusterid.hex}-audit")}")
   )}"
 }
 

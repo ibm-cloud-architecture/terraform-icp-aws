@@ -3,7 +3,7 @@ console.log('Loading function');
 var uuid = require('uuid');
 var fs = require('fs');
 var yaml = require('js-yaml');
-var common = require('./common.js')
+var common = require('./common.js');
 
 var job_tmpl = yaml.safeLoad(fs.readFileSync('./job-tmpl.yaml', 'utf8'));
 
@@ -40,7 +40,7 @@ exports.handler = (event, context, callback) => {
         /* not interested in this event */
         return;
     }
-
+    
     var promises = [];
 
     promises.push(common.get_instance_ip(event.region, instanceId));
@@ -48,16 +48,17 @@ exports.handler = (event, context, callback) => {
     promises.push(common.get_bucket_object(process.env.s3_bucket, "lambda-cert.pem"));
     promises.push(common.get_bucket_object(process.env.s3_bucket, "lambda-key.pem"));
 
-    return Promises.all(promises)
+    return Promise.all(promises)
     .then(function(result) {
       /* try to create a batch job in kube */
       if (event.detail.LifecycleTransition === "autoscaling:EC2_INSTANCE_TERMINATING") {
-        console.log("scaling down node " + result[0]);
+        console.log("scaling down node " + result[0].Reservations[0].Instances[0].PrivateIpAddress);
         return create_delete_node_job(result, event);
       }
 
       if (event.detail.LifecycleTransition === "autoscaling:EC2_INSTANCE_LAUNCHING") {
-        console.log("scaling up node " + result[0]);
+        console.log("scaling up cluster using node " + result[0].Reservations[0].Instances[0].PrivateIpAddress);
+
         return create_add_node_job(result, event);
       }
     }).catch(function(err) {
@@ -70,10 +71,13 @@ exports.handler = (event, context, callback) => {
 };
 
 function create_add_node_job(params, event) {
-  var privateIp = params[0];
-  var jobName = 'add-node-' + privateIp.replace(new RegExp(/\./, 'g'), "-") + "-" + uuid.v4().substring(0, 7);
+  var privateIp = params[0].Reservations[0].Instances[0].PrivateIpAddress;
+  //var jobName = 'add-node-' + privateIp.replace(new RegExp(/\./, 'g'), "-") + "-" + uuid.v4().substring(0, 7);
   var metadataStr = unescape(event.detail.NotificationMetadata);
   var metadata = JSON.parse(metadataStr);
+  
+  var instance_name = metadata.instance_name + "-" + metadata.cluster_id + "-worker-" + event.detail.EC2InstanceId.replace("i-", "");
+  var jobName = 'add-node-' + instance_name + "-" + uuid.v4().substring(0, 7);
 
   job_tmpl.metadata.name = jobName;
   job_tmpl.metadata.labels.run = jobName;
@@ -81,7 +85,7 @@ function create_add_node_job(params, event) {
 
   // use installer image
   job_tmpl.spec.template.spec.containers[0].image = metadata.icp_inception_image;
-  job_tmpl.spec.template.spec.containers[0].command = [ "/bin/bash", "-c" ];
+  job_tmpl.spec.template.spec.containers[0].command = [ "/bin/bash", "-c", "/installer/cluster/add_worker.sh" ];
   job_tmpl.spec.template.spec.containers[0].env = [
     {
       name: "LICENSE",
@@ -118,6 +122,10 @@ function create_add_node_job(params, event) {
     {
       name: "INSTANCEID",
       value: event.detail.EC2InstanceId
+    },
+    {
+      name: "INSTANCE_NAME",
+      value: instance_name
     },
     {
       name: "REGION",
@@ -128,30 +136,34 @@ function create_add_node_job(params, event) {
       value: "false"
     }
   ];
-
-  job_tmpl.spec.template.spec.containers[0].args = [
-    "curl https://s3.amazonaws.com/aws-cli/awscli-bundle.zip -o /tmp/awscli-bundle.zip;" +
-    "unzip /tmp/awscli-bundle.zip -d /tmp; " +
-    "/tmp/awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws; " +
-    "/usr/local/bin/aws s3 cp --recursive s3://${CLUSTER_BACKUP} /installer/cluster; " +
-    "rm -f /installer/cluster/.install.lock; " +
-    "chmod 400 /installer/cluster/ssh_key; " +
-    "ansible -i /opt/ibm/cluster/hosts ${NODE_IP} --private-key /opt/ibm/cluster/ssh_key -u icpdeploy -b -m wait_for -a 'path=/var/lib/cloud/instance/boot-finished timeout=18000; " +
-    "crudini --set /installer/cluster/hosts worker ${NODE_IP}; " +
-    "/installer/installer.sh install -l ${NODE_IP} && " +
-    "/usr/local/bin/aws --region ${REGION} autoscaling complete-lifecycle-action --lifecycle-hook-name ${LIFECYCLEHOOKNAME} --lifecycle-action-token ${LIFECYCLEACTIONTOKEN} --auto-scaling-group-name ${ASGNAME} --lifecycle-action-result CONTINUE --instance-id ${INSTANCEID} && " +
-    "/usr/local/bin/aws s3 sync /installer/cluster s3://${CLUSTER_BACKUP}"
+  
+  job_tmpl.spec.template.spec.containers[0].volumeMounts = [
+    {
+      mountPath: "/installer/cluster/add_worker.sh",
+      name: "autoscaler-config",
+      subPath: "add_worker.sh"
+    }
   ];
+  
+  job_tmpl.spec.template.spec.volumes[0].configMap.defaultMode = 493;
+  job_tmpl.spec.template.spec.volumes[0].configMap.items[0].key = "add_worker.sh";
+  job_tmpl.spec.template.spec.volumes[0].configMap.items[0].path = "add_worker.sh";
+  job_tmpl.spec.template.spec.volumes[0].configMap.name = "autoscaler-config";
+  job_tmpl.spec.template.spec.volumes[0].name = "autoscaler-config";
 
   console.log("Sending job: " + JSON.stringify(job_tmpl, 2));
-  return common.create_job(params[1], params[2], params[3], job_tmpl);
+  console.log("certificate is: " + params[1].Body);
+  return common.create_job(params[1].Body, params[2].Body, params[3].Body, job_tmpl);
 }
 
 function create_delete_node_job(params, event) {
-  var privateIp = params[0];
-  var jobName = 'delete-node-' + privateIp.replace(new RegExp(/\./, 'g'), "-") + "-" + uuid.v4().substring(0, 7);
+  var privateIp = params[0].Reservations[0].Instances[0].PrivateIpAddress;
+  //var jobName = 'delete-node-' + privateIp.replace(new RegExp(/\./, 'g'), "-") + "-" + uuid.v4().substring(0, 7);
   var metadataStr = unescape(event.detail.NotificationMetadata);
   var metadata = JSON.parse(metadataStr);
+  
+  var instance_name = metadata.instance_name + "-" + metadata.cluster_id + "-worker-" + event.detail.EC2InstanceId.replace("i-", "");
+  var jobName = 'delete-node-' + instance_name + "-" + uuid.v4().substring(0, 7);
 
   job_tmpl.metadata.name = jobName;
   job_tmpl.metadata.labels.run = jobName;
@@ -159,7 +171,7 @@ function create_delete_node_job(params, event) {
 
   // use installer image
   job_tmpl.spec.template.spec.containers[0].image = metadata.icp_inception_image;
-  job_tmpl.spec.template.spec.containers[0].command = [ "/bin/bash", "-c" ];
+  job_tmpl.spec.template.spec.containers[0].command = [ "/bin/bash", "-c", "/installer/cluster/remove_worker.sh" ];
   job_tmpl.spec.template.spec.containers[0].env = [
     {
       name: "LICENSE",
@@ -203,22 +215,22 @@ function create_delete_node_job(params, event) {
     }
   ];
 
-  job_tmpl.spec.template.spec.containers[0].args = [
-    "curl https://s3.amazonaws.com/aws-cli/awscli-bundle.zip -o /tmp/awscli-bundle.zip;" +
-    "unzip /tmp/awscli-bundle.zip -d /tmp; " +
-    "/tmp/awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws; " +
-    "aws s3 cp --recursive s3://${CLUSTER_BACKUP} /installer/cluster; " +
-    "chmod 400 /installer/cluster/ssh_key; " +
-    "crudini --set /installer/cluster/hosts worker ${NODE_IP}; " +
-    "rm -f /installer/cluster/.install.lock; " +
-    "/installer/installer.sh uninstall -l ${NODE_IP} && " +
-    "aws --region ${REGION} autoscaling complete-lifecycle-action --lifecycle-hook-name ${LIFECYCLEHOOKNAME} --lifecycle-action-token ${LIFECYCLEACTIONTOKEN} --auto-scaling-group-name ${ASGNAME} --lifecycle-action-result CONTINUE --instance-id ${INSTANCEID} && " +
-    "crudini --del /installer/cluster/hosts worker ${NODE_IP} && " +
-    "/usr/local/bin/aws s3 sync /installer/cluster s3://${CLUSTER_BACKUP}"
+  job_tmpl.spec.template.spec.containers[0].volumeMounts = [
+    {
+      mountPath: "/installer/cluster/remove_worker.sh",
+      name: "autoscaler-config",
+      subPath: "remove_worker.sh"
+    }
   ];
+  
+  job_tmpl.spec.template.spec.volumes[0].configMap.defaultMode = 493;
+  job_tmpl.spec.template.spec.volumes[0].configMap.items[0].key = "remove_worker.sh";
+  job_tmpl.spec.template.spec.volumes[0].configMap.items[0].path = "remove_worker.sh";
+  job_tmpl.spec.template.spec.volumes[0].configMap.name = "autoscaler-config";
+  job_tmpl.spec.template.spec.volumes[0].name = "autoscaler-config";
 
   console.log("Sending job: " + JSON.stringify(job_tmpl, 2));
-  return common.create_job(params[1], params[2], params[3], job_tmpl);
+  return common.create_job(params[1].Body, params[2].Body, params[3].Body, job_tmpl);
 }
 
 process.on('unhandledRejection', function(error) {
@@ -254,3 +266,4 @@ exports.handler(sample_event, null, function(err, result) {
   }
 });
 */
+

@@ -47,7 +47,7 @@ resource "aws_lambda_function" "icp_autoscale" {
   function_name    = "icp-worker-autoscale-${var.cluster_id}"
   role             = "${local.iam_lambda_role_arn}"
   handler          = "index.handler"
-  runtime          = "nodejs6.10"
+  runtime          = "nodejs8.10"
   timeout          = 10
 
   vpc_config {
