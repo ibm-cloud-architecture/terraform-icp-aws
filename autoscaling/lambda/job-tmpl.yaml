@@ -36,4 +36,25 @@ spec:
         env:
         - name: LICENSE
           value: accept
+        volumeMounts:
+        - mountPath: /installer/cluster/add_worker.sh
+          name: autoscaler-config
+          subPath: add_worker.sh
+      volumes:
+      - configMap:
+          defaultMode: 493
+          items:
+          - key: add_worker.sh
+            path: add_worker.sh
+          name: autoscaler-config
+        name: autoscaler-config
+      nodeSelector:
+        master: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Exists
+      - key: CriticalAddonsOnly
+        operator: Exists  
   backoffLimit: 4
+

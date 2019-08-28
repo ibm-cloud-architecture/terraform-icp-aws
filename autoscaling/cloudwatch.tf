@@ -13,7 +13,7 @@ resource "aws_cloudwatch_event_rule" "icp_worker_node_added_event" {
   ],
   "detail": {
     "AutoScalingGroupName": [
-      "${aws_autoscaling_group.icp_worker_asg.name}"
+      ${join(",", formatlist("\"%v\"", aws_autoscaling_group.icp_worker_asg.*.name))}
     ]
   }
 }
@@ -35,7 +35,7 @@ resource "aws_cloudwatch_event_rule" "icp_worker_node_remove_event" {
   ],
   "detail": {
     "AutoScalingGroupName": [
-      "${aws_autoscaling_group.icp_worker_asg.name}"
+      ${join(",", formatlist("\"%v\"", aws_autoscaling_group.icp_worker_asg.*.name))}
     ]
   }
 }

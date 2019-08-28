@@ -25,6 +25,10 @@ variable "instance_type" {
   default = ""
 }
 
+variable "ebs_optimized" {
+  default = ""
+}
+
 variable "cluster_id" {
   default = ""
 }
@@ -84,8 +88,25 @@ variable "icp_inception_image" {
   default     = "ibmcom/icp-inception:2.1.0.2-ee"
 }
 
+variable "awscli" {
+  default = ""
+}
+
 variable "lambda_s3_bucket" {
   default = ""
+}
+
+variable "instance_name" {
+  default = ""
+}
+
+variable "icp_config_s3_bucket" {
+  default = ""
+}
+
+# Default tags to apply to resources
+variable "asg_tags" {
+  default = []
 }
 
 variable "enabled" {

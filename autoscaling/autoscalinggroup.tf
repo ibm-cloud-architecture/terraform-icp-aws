@@ -10,7 +10,7 @@ resource "aws_launch_configuration" "icp_worker_lc" {
 
   security_groups = ["${var.security_groups}"]
 
-  ebs_optimized = true
+  ebs_optimized = "${var.ebs_optimized}"
   root_block_device {
     volume_size = "${var.worker_root_disk_size}"
   }
@@ -27,15 +27,17 @@ resource "aws_launch_configuration" "icp_worker_lc" {
 packages:
   - unzip
   - python
+  - bind-utils
 rh_subscription:
   enable-repo: rhui-REGION-rhel-server-optional
 write_files:
-  - path: /tmp/bootstrap.sh
+  - path: /tmp/bootstrap-node.sh
     permissions: '0755'
     encoding: b64
-    content: ${base64encode(file("${path.module}/../scripts/bootstrap.sh"))}
+    content: ${base64encode(file("${path.module}/../scripts/bootstrap-node.sh"))}
 runcmd:
-  - /tmp/bootstrap.sh ${var.docker_package_location != "" ? "-p ${var.docker_package_location}" : "" } -d /dev/xvdx ${var.image_location != "" ? "-i ${var.image_location}" : "" } -s ${var.icp_inception_image}
+  - /tmp/bootstrap-node.sh -c ${var.icp_config_s3_bucket} -s "bootstrap.sh"
+  - /tmp/icp_scripts/bootstrap.sh ${var.docker_package_location != "" ? "-p ${var.docker_package_location}" : "" } -d /dev/xvdx ${var.image_location != "" ? "-i ${var.image_location}" : "" } -s ${var.icp_inception_image}
 users:
   - default
   - name: icpdeploy
@@ -54,57 +56,58 @@ EOF
 }
 
 resource "aws_autoscaling_group" "icp_worker_asg" {
-  count = "${var.enabled ? 1 : 0}"
-  name                 = "icp-worker-asg-${var.cluster_id}"
+  count = "${length(var.azs)}"
+  name                 = "icp-worker-asg-${var.aws_region}${element(var.azs, count.index)}-${var.cluster_id}"
   launch_configuration = "${aws_launch_configuration.icp_worker_lc.name}"
   min_size             = 0
   max_size             = 20
   force_delete         = true
 
-  availability_zones   = "${formatlist("%v%v", var.aws_region, var.azs)}"
-  vpc_zone_identifier  = ["${var.private_subnet_ids}"]
+  vpc_zone_identifier  = ["${element(var.private_subnet_ids, count.index)}"]
 
-  tags = [
-    {
-      key                 = "kubernetes.io/cluster/${var.cluster_id}",
-      value               = "${var.cluster_id}",
-      propagate_at_launch = true
-    }
-  ]
+  tags = ["${concat(
+    var.asg_tags,
+    list(map("key", "k8s.io/cluster-autoscaler/enabled", "value", "${var.enabled}", "propagate_at_launch", "false")),
+    list(map("key", "kubernetes.io/cluster/${var.cluster_id}", "value", "${var.cluster_id}", "propagate_at_launch", "true"))
+  )}"]
 }
 
 resource "aws_autoscaling_lifecycle_hook" "icp_add_worker_hook" {
-  count = "${var.enabled ? 1 : 0}"
-  name                   = "icp-workernode-added-${var.cluster_id}"
-  autoscaling_group_name = "${aws_autoscaling_group.icp_worker_asg.name}"
+  count = "${length(var.azs)}"
+  name                   = "icp-workernode-added-${var.aws_region}${element(var.azs, count.index)}-${var.cluster_id}"
+  autoscaling_group_name = "${element(aws_autoscaling_group.icp_worker_asg.*.name, count.index)}"
   default_result         = "ABANDON"
   heartbeat_timeout      = 3600
   lifecycle_transition   = "autoscaling:EC2_INSTANCE_LAUNCHING"
 
   notification_metadata = <<EOF
 {
-  "icp_inception_image": "${var.icp_inception_image}",
+  "icp_inception_image": "${var.docker_registry}/${var.icp_inception_image}",
   "docker_package_location": "${var.docker_package_location}",
   "image_location": "${var.image_location}",
-  "cluster_backup": "icpbackup-${var.cluster_id}"
+  "cluster_backup": "icpbackup-${var.cluster_id}",
+  "cluster_id": "${var.cluster_id}",
+  "instance_name": "${var.instance_name}"
 }
 EOF
 }
 
 resource "aws_autoscaling_lifecycle_hook" "icp_del_worker_hook" {
-  count = "${var.enabled ? 1 : 0}"
-  name                   = "icp-workernode-removed-${var.cluster_id}"
-  autoscaling_group_name = "${aws_autoscaling_group.icp_worker_asg.name}"
+  count = "${length(var.azs)}"
+  name                   = "icp-workernode-removed-${var.aws_region}${element(var.azs, count.index)}-${var.cluster_id}"
+  autoscaling_group_name = "${element(aws_autoscaling_group.icp_worker_asg.*.name, count.index)}"
   default_result         = "ABANDON"
   heartbeat_timeout      = 3600
   lifecycle_transition   = "autoscaling:EC2_INSTANCE_TERMINATING"
 
   notification_metadata = <<EOF
 {
-  "icp_inception_image": "${var.icp_inception_image}",
+  "icp_inception_image": "${var.docker_registry}/${var.icp_inception_image}",
   "docker_package_location": "${var.docker_package_location}",
   "image_location": "${var.image_location}",
-  "cluster_backup": "icpbackup-${var.cluster_id}"
+  "cluster_backup": "icpbackup-${var.cluster_id}",
+  "cluster_id": "${var.cluster_id}",
+  "instance_name": "${var.instance_name}"
 }
 EOF
 }

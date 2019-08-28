@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoscaler-config
+data:
+  add_worker.sh: |
+   #!/bin/bash
+   curl https://s3.amazonaws.com/aws-cli/awscli-bundle.zip -o /tmp/awscli-bundle.zip
+   unzip /tmp/awscli-bundle.zip -d /tmp
+   /tmp/awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+
+   /usr/local/bin/aws s3 cp --no-progress --recursive --exclude "images/*" --exclude "patches/*" s3://${CLUSTER_BACKUP} /installer/cluster
+
+   rm -f /installer/cluster/.install.lock
+   chmod 400 /installer/cluster/ssh_key
+   crudini --set /installer/cluster/hosts worker ${NODE_IP}
+
+   ansible -i /installer/cluster/hosts localhost --private-key /installer/cluster/ssh_key -u icpdeploy -b -m wait_for -a "host=${NODE_IP} port=22 timeout=18000"
+   ansible -i /installer/cluster/hosts ${NODE_IP} --private-key /installer/cluster/ssh_key -u icpdeploy -b -m wait_for -a "path=/var/lib/cloud/instance/boot-finished timeout=18000"
+   echo "Waiting for node to initialize"
+   echo ${INSTANCE_NAME} > hostname
+   ansible -i /installer/cluster/hosts ${NODE_IP} --private-key /installer/cluster/ssh_key -u icpdeploy -b -m copy -a "src=hostname dest=/etc/hostname"
+   ansible -i /installer/cluster/hosts ${NODE_IP} --private-key /installer/cluster/ssh_key -u icpdeploy -b -m service -a "name=systemd-hostnamed state=restarted"
+   /usr/local/bin/aws --region ${REGION} ec2 create-tags --resources ${INSTANCEID} --tags Key=Name,Value=${INSTANCE_NAME}
+
+   (
+   /installer/installer.sh worker -l ${NODE_IP} &&
+   /usr/local/bin/aws --region ${REGION} autoscaling complete-lifecycle-action --lifecycle-hook-name ${LIFECYCLEHOOKNAME} --lifecycle-action-token ${LIFECYCLEACTIONTOKEN} --auto-scaling-group-name ${ASGNAME} --lifecycle-action-result CONTINUE --instance-id ${INSTANCEID} &&
+   /usr/local/bin/aws s3 sync /installer/cluster s3://${CLUSTER_BACKUP}
+   ) || (
+   /installer/installer.sh uninstall -l ${NODE_IP}
+   false
+   )
+  remove_worker.sh: |
+   #!/bin/bash
+   curl https://s3.amazonaws.com/aws-cli/awscli-bundle.zip -o /tmp/awscli-bundle.zip
+   unzip /tmp/awscli-bundle.zip -d /tmp
+   /tmp/awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+   aws s3 cp --no-progress --recursive --exclude "images/*" --exclude "patches/*" s3://${CLUSTER_BACKUP} /installer/cluster
+   chmod 400 /installer/cluster/ssh_key
+   crudini --set /installer/cluster/hosts worker ${NODE_IP}
+   rm -f /installer/cluster/.install.lock
+   /installer/installer.sh uninstall -l ${NODE_IP} &&
+   aws --region ${REGION} autoscaling complete-lifecycle-action --lifecycle-hook-name ${LIFECYCLEHOOKNAME} --lifecycle-action-token ${LIFECYCLEACTIONTOKEN} --auto-scaling-group-name ${ASGNAME} --lifecycle-action-result CONTINUE --instance-id ${INSTANCEID} &&
+   crudini --del /installer/cluster/hosts worker ${NODE_IP} &&
+   /usr/local/bin/aws s3 sync /installer/cluster s3://${CLUSTER_BACKUP}

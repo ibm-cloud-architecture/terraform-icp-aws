@@ -3,6 +3,8 @@
 source /tmp/icp_scripts/functions.sh
 
 logfile="/tmp/icp_logs/start_install.log"
+mkdir -p /tmp/icp_logs
+
 
 #
 # Function for logging output.
@@ -64,7 +66,7 @@ if [[ ! -z "${image_location}" ]]; then
   if [[ "${image_location:0:2}" == "s3" ]]; then
     # stream it right out of s3 into docker
     logmsg "Copying binary package from ${image_location} ..."
-    ${awscli} s3 cp ${image_location} /tmp --no-progress
+    ${awscli} s3 cp --no-progress ${image_location} /tmp 
 
     logmsg "Loading docker images from /tmp/`basename ${image_location}` ..."
     tar zxf /tmp/`basename ${image_location}` -O | docker load | tee -a $logfile
@@ -92,19 +94,16 @@ docker run -v `pwd`:/deploy -w=/deploy --entrypoint=git hashicorp/terraform:0.11
 docker run -v `pwd`:/deploy -w=/deploy/terraform-module-icp-deploy --entrypoint=git hashicorp/terraform:0.11.14 checkout 3.1.1
 
 # write the terraform.tfvars
-${awscli} s3 cp s3://${s3_config_bucket}/terraform.tfvars terraform-module-icp-deploy/terraform.tfvars
+${awscli} s3 cp --no-progress s3://${s3_config_bucket}/terraform.tfvars terraform-module-icp-deploy/terraform.tfvars
 
 # write the additional icp config file for merging
-${awscli} s3 cp s3://${s3_config_bucket}/icp-terraform-config.yaml terraform-module-icp-deploy/icp-terraform-config.yaml
+${awscli} s3 cp --no-progress s3://${s3_config_bucket}/icp-terraform-config.yaml terraform-module-icp-deploy/icp-terraform-config.yaml
 
 docker run -v `pwd`:/deploy -w=/deploy/terraform-module-icp-deploy hashicorp/terraform:0.11.14 init
 docker run -v `pwd`:/deploy -w=/deploy/terraform-module-icp-deploy hashicorp/terraform:0.11.14 apply -auto-approve
-instretval=$?
 
 # backup the config
 logmsg "Backing up the config to the S3 bucket."
-${awscli} s3 sync /opt/ibm/cluster s3://${s3_config_bucket} --no-progress
+${awscli} s3 sync /opt/ibm/cluster s3://${s3_config_bucket}
 
 logmsg "~~~~~~~~ Completed ICP installation Code ~~~~~~~~"
-# Ensure the script exits with the exit code of the ICP installer
-exit ${instretval}
