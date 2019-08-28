@@ -18,7 +18,6 @@ data:
    ansible -i /installer/cluster/hosts localhost --private-key /installer/cluster/ssh_key -u icpdeploy -b -m wait_for -a "host=${NODE_IP} port=22 timeout=18000"
    ansible -i /installer/cluster/hosts ${NODE_IP} --private-key /installer/cluster/ssh_key -u icpdeploy -b -m wait_for -a "path=/var/lib/cloud/instance/boot-finished timeout=18000"
    echo "Waiting for node to initialize"
-   ansible -i /installer/cluster/hosts ${NODE_IP} --private-key /installer/cluster/ssh_key -u icpdeploy -b -m lineinfile -a 'path=/etc/hosts line="3.13.117.119 icp-console.bluesky.local"'
    echo ${INSTANCE_NAME} > hostname
    ansible -i /installer/cluster/hosts ${NODE_IP} --private-key /installer/cluster/ssh_key -u icpdeploy -b -m copy -a "src=hostname dest=/etc/hostname"
    ansible -i /installer/cluster/hosts ${NODE_IP} --private-key /installer/cluster/ssh_key -u icpdeploy -b -m service -a "name=systemd-hostnamed state=restarted"
